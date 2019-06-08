@@ -1,0 +1,185 @@
+---
+title: "Mini Project"
+author: "Ray Liu"
+date: "5/29/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+#pre analysis
+setwd("~/Desktop/2019/NU/2019-spring/MSIT423/homework")
+crowd = read.csv("crowd.csv")
+summary(crowd) #seems like most of y is 0.
+```
+
+```{r}
+#train set
+set.seed(12345)
+train = runif(nrow(crowd))<.5
+table(train)
+addmargins(table(train,crowd$y))
+round(cor(crowd), 2)
+#strong correlation between age and pastideas, while other variables is not highly related with each other.
+```
+
+```{r}
+#Try Lasso
+#lasso(conributer+content)/all variables
+library(glmnet)
+x = model.matrix(y ~ month+diversity+pastideas+pastaccept+commentsC+age+X1+X2
+                 +X3+X4+X5+X6+X7+X8+X9+X10+X11, crowd)
+fit.lasso = glmnet(x[train,], crowd$y[train], alpha=1)
+plot(fit.lasso, xvar="lambda")
+fit.cv = cv.glmnet(x[train,], crowd$y[train], alpha=1) # find optimal lambda
+abline(v=log(fit.cv$lambda.min))
+fit.cv$lambda.min        # optimal value of lambda
+abline(v=log(fit.cv$lambda.min))
+plot(fit.cv)          # plot MSE vs. log(lambda)
+predict(fit.lasso, s=fit.cv$lambda.min, newx=x[!train,], type = "coef")
+yhat = predict(fit.lasso, s=fit.cv$lambda.min, newx=x[!train,])  # find yhat for best model
+mean((crowd$y[!train] - yhat)^2)      # compute test set MSE
+#all variables
+xa = model.matrix(y ~ ., crowd)
+fit.lassoa = glmnet(xa[train,], crowd$y[train], alpha=1)
+plot(fit.lassoa, xvar="lambda")
+fit.cva = cv.glmnet(xa[train,], crowd$y[train], alpha=1) # find optimal lambda
+fit.cva$lambda.min        # optimal value of lambda
+abline(v=log(fit.cva$lambda.min))
+plot(fit.cva)          # plot MSE vs. log(lambda)
+yhata = predict(fit.lassoa, s=fit.cva$lambda.min, newx=xa[!train,])  # find yhat for best model
+mean((crowd$y[!train] - yhata)^2)      # compute test set MSE
+#AUC
+library(pROC)
+plot.roc(crowd$y[!train], as.vector(yhat), legacy.axes=T,
+         print.auc=T, print.auc.x=.7, print.auc.y=.6)
+plot.roc(crowd$y[!train], as.vector(yhata), add=T, col=2,
+         print.auc=T, print.auc.x=1, print.auc.y=.9, print.auc.col=2)
+
+```
+
+```{r}
+#ridge(conributer+content)/all variables
+library(glmnet)
+x = model.matrix(y ~ month+diversity+pastideas+pastaccept+commentsC+age+X1+X2
+                 +X3+X4+X5+X6+X7+X8+X9+X10+X11, crowd)
+fit.lasso = glmnet(x[train,], crowd$y[train], alpha=0)
+plot(fit.lasso, xvar="lambda")
+fit.cv = cv.glmnet(x[train,], crowd$y[train], alpha=0) # find optimal lambda
+fit.cv$lambda.min        # optimal value of lambda
+abline(v=log(fit.cv$lambda.min))
+plot(fit.cv)          # plot MSE vs. log(lambda)
+yhat = predict(fit.lasso, s=fit.cv$lambda.min, newx=x[!train,])  # find yhat for best model
+mean((crowd$y[!train] - yhat)^2)      # compute test set MSE
+
+#all variables
+xa = model.matrix(y ~ ., crowd)
+fit.lassoa = glmnet(xa[train,], crowd$y[train], alpha=0)
+plot(fit.lassoa, xvar="lambda")
+fit.cva = cv.glmnet(xa[train,], crowd$y[train], alpha=0) # find optimal lambda
+fit.cva$lambda.min        # optimal value of lambda
+abline(v=log(fit.cva$lambda.min))
+plot(fit.cva)          # plot MSE vs. log(lambda)
+yhata = predict(fit.lassoa, s=fit.cva$lambda.min, newx=xa[!train,])  # find yhat for best model
+mean((crowd$y[!train] - yhata)^2)      # compute test set MSE
+
+#AUC
+library(pROC)
+plot.roc(crowd$y[!train], as.vector(yhat), legacy.axes=T,
+         print.auc=T, print.auc.x=.7, print.auc.y=.6)
+plot.roc(crowd$y[!train], as.vector(yhata), add=T, col=2,
+         print.auc=T, print.auc.x=1, print.auc.y=.9, print.auc.col=2)
+```
+
+```{r}
+#GAM / all
+library(gam)
+fit.gam=gam(y ~ month+diversity+pastideas+pastaccept+commentsC+age+X1+X2
+            +X3+X4+X5+X6+X7+X8+X9+X10+X11, binomial, data=crowd[train,])
+summary(fit.gam)
+plot(fit.gam, se=T)
+yhatg = predict(fit.gam, crowd[!train,]) 
+fit.gama=gam(y ~ month+diversity+pastideas+pastaccept+commentsC+age+X1+X2
+            +X3+X4+X5+X6+X7+X8+X9+X10+X11+votes+comments, binomial, data=crowd[train,])
+yhatga = predict(fit.gama, crowd[!train,]) 
+plot.roc(crowd$y[!train], as.vector(yhatg), legacy.axes=T,
+         print.auc=T, print.auc.x=.7, print.auc.y=.6)
+plot.roc(crowd$y[!train], as.vector(yhatga), add=T, col=2,
+         print.auc=T, print.auc.x=1, print.auc.y=.9, print.auc.col=2)
+```
+
+```{r}
+#Classifier tree/ all
+library(tree)
+fit.tree = tree(factor(y) ~ month+diversity+pastideas+pastaccept+commentsC+age+X1+X2
+                +X3+X4+X5+X6+X7+X8+X9+X10+X11, crowd[train,])
+fit.tree
+plot(fit.tree, type = "uniform")
+text(fit.tree)
+plot(cv.tree(fit.tree))
+yhatt = predict(fit.tree, newdata = crowd[!train,])
+fit.treea = tree(factor(y) ~ . , crowd[train,])
+yhatta = predict(fit.treea, newdata=crowd[!train,])
+plot(cv.tree(fit.treea))
+plot.roc(crowd$y[!train], as.vector(yhatt[,2]), legacy.axes=T,
+         print.auc=T, print.auc.x=.7, print.auc.y=.6)
+plot.roc(crowd$y[!train], as.vector(yhatta[,2]), add=T, col=2,
+         print.auc=T, print.auc.x=1, print.auc.y=.9, print.auc.col=2)
+```
+
+```{r}
+#RF/ all
+library(randomForest)
+fitcc=randomForest(x=crowd[train,c(1:6,9:19)],y=crowd$y[train],extest=crowd[!train,c(1:6,9:19)], ntree=1000, mtry=4)
+fita=randomForest(x=crowd[train, c(1:19)], y=crowd$y[train], xtest=crowd[!train,c(1:19)], ntree=1000, keep.forest = T, mtry=4)
+fitvaluea=predict(fita, newdata=crowd[!train,])
+fitvaluecc=predict(fitcc, newdata=crowd[!train,c(1:6,9:19)])
+plot.roc(crowd$y[!train], as.vector(fitvaluecc), legacy.axes=T,
+         print.auc=T, print.auc.x=.7, print.auc.y=.6)
+plot.roc(crowd$y[!train], as.vector(fitvaluea), add=T, col=2,
+         print.auc=T, print.auc.x=1, print.auc.y=.9, print.auc.col=2)
+```
+```{r}
+#analyze RF
+hist(fita$test$predicted, main = "Predicted probabilites for the test set")
+varImpPlot((fita))
+partialPlot(fita, crowd[train,], "votes")
+partialPlot(fita, crowd[train,], "comments")
+partialPlot(fita, crowd[train,], "diversity")
+```
+
+```{r}
+# GBM/ all
+library(gbm)
+fit = gbm(y ~ ., data=crowd[train,], interaction.depth=1, n.trees=500, shrinkage=0.02)
+fitdp2= gbm(y ~ ., data=crowd[train,], interaction.depth=2, n.trees=500, shrinkage=0.02) # find that we do not need depth 2.
+yhat = predict(fit, newdata=crowd[!train,], n.trees=500)
+fitcc =gbm(y~month+diversity+pastideas+pastaccept+commentsC+age+X1+X2
+           +X3+X4+X5+X6+X7+X8+X9+X10+X11, data=crowd[train,], 
+           interaction.depth = 2, n.trees = 500, shrinkage = 0.02)
+yhatcc=predict(fitcc, newdata=crowd[!train,], n.trees=500)
+plot.roc(crowd$y[!train], as.vector(yhatcc), legacy.axes=T,
+         print.auc=T, print.auc.x=.7, print.auc.y=.6, print.quc.col=1)
+plot.roc(crowd$y[!train], as.vector(yhat), add=T, col=2,
+         print.auc=T, print.auc.x=1, print.auc.y=.9, print.auc.col=2)
+summary(fit)
+mean((crowd$y[!train] - yhat)^2)   
+```
+
+```{r}
+#try pca
+fitpca= prcomp(crowd[,1:19], scale=T)
+summary(fitpca)
+fitpca$rotation
+plot(fitpca$x[,1], fitpca$x[,2], col=1+crowd$y, pch=16+crowd$y, cex=0.7)
+library(scatterplot3d)
+plot3d <- with(crowd, scatterplot3d(crowd[,7], crowd[,8], crowd[,2], color = 1+crowd$y, pch = 16),cex.symbols = 0.7, xlab="votes", ylab="comments",zlab="diversity")
+```
